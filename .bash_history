@@ -1,0 +1,185 @@
+nano app.py
+[200~python
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+Define Business Phase Logic Engine
+def determine_business_phase(financials):
+rev_growth = financials.get('revenue_growth_3yr_avg', 0)
+net_inc = financials.get('net_income_positive', False)
+fcf_pos = financials.get('fcf_margin_positive', False)
+shares = financials.get('share_count_trend', 'stable')
+rev_trend = financials.get('revenue_trend_5yr', 'growing')
+if rev_trend == 'declining' and rev_growth < 0:; return "Decline"; if rev_growth > 0.20 and not net_inc and not fcf_pos:; return "Startup"; if rev_growth > 0.20 and not net_inc and fcf_pos:; return "Hyper Growth"; if 0.08 <= rev_growth <= 0.20 and net_inc and fcf_pos:; return "Operating Leverage"; if rev_growth < 0.08 and net_inc and fcf_pos and shares == 'decreasing':; return "Capital Return"; return "Operating Leverage";  App UI Initialization; st.set_page_config(page_title="Stock Simplifier Pro", layout="wide")
+st.title("📊 Custom Stock Simplifier Engine (Evaluation Pro)")
+st.caption("Phase-Aware Scoring Matrix with Automated Valuation & Rating Recommendations")
+Persistent Session State Storage
+if 'ticker' not in st.session_state:; st.session_state.ticker = ""; if 'company_data' not in st.session_state:; st.session_state.company_data = None; if 'phase' not in st.session_state:; st.session_state.phase = None; if 'scores' not in st.session_state:; st.session_state.scores = {'bq': 5, 'moat': 5, 'growth': 5, 'mgmt': 5, 'risk': 5};  Sidebar: Core Ingestion Setup; with st.sidebar:; st.header("🔍 Stock Fetcher")
+ticker_input = st.text_input("Enter Stock Ticker (e.g. AAPL, GOOGL):").upper().strip()
+if st.button("Fetch & Analyze Data", use_container_width=True) and ticker_input:
+with st.spinner("Accessing financial parameters..."):
+try:
+ticker = yf.Ticker(ticker_input)
+financials = ticker.get_financials()
+cashflow = ticker.get_cashflow()
+# Financial Extractor Pipeline with strict fallbacks
+if 'Total Revenue' in financials.index:; revenue = financials.loc['Total Revenue']; rev_growth_3yr_avg = ((revenue.iloc[0] - revenue.iloc[-1]) / revenue.iloc[-1]) / len(revenue) if len(revenue) > 1 else 0
+rev_trend = 'growing' if revenue.iloc[0] > revenue.iloc[-1] else 'declining'
+else:
+rev_growth_3yr_avg, rev_trend = 0, 'stable'
+net_income_positive = financials.loc['Net Income'].iloc[0] > 0 if 'Net Income' in financials.index else False
+# Fetch trailing EPS and Current Price safely
+fast_info = ticker.fast_info
+current_price = fast_info.get('last_price', 0)
+# Pull raw EPS out of financial statements if fast_info fails
+eps = 0.0
+if 'Diluted EPS' in financials.index:; eps = float(financials.loc['Diluted EPS'].iloc[0])
+# Dynamic valuation metric detection
+if 'Total Revenue' in financials.index:; trailing_rev = float(financials.loc['Total Revenue'].iloc[0])
+else:
+trailing_rev = 0.0
+company_payload = {
+'name': ticker_input,
+'ticker': ticker_input,
+'current_price': float(current_price),
+'eps': eps,
+'trailing_revenue': trailing_rev,
+'revenue_growth_3yr_avg': float(rev_growth_3yr_avg),
+'net_income_positive': bool(net_income_positive),
+'fcf_margin_positive': True,
+'revenue_trend_5yr': rev_trend,
+'share_count_trend': 'stable',
+'market_cap': fast_info.get('market_cap', 0)
+}
+st.session_state.company_data = company_payload
+st.session_state.phase = determine_business_phase(company_payload)
+st.session_state.ticker = ticker_input
+st.success(f"Successfully loaded {ticker_input}")
+except Exception as e:
+st.error(f"Error parsing ticker metrics: {e}")
+Core Guided Checklist Interface
+if st.session_state.company_data:; data = st.session_state.company_data; st.subheader(f"Analyzing: {data['ticker']} — Current Price: $`{data['current_price']:.2f}")
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+"1. Business Quality", "2. Moat Strength", "3. Growth Horizon",
+"4. Management Alignment", "5. Risk Mitigation", "6. Valuation Model"
+])
+
+with tab1:
+st.markdown("### Dimension 1: Business Quality & Model")
+col1, col2 = st.columns(2)
+with col1:
+st.metric("3-Yr Avg Revenue Growth", f"{data['revenue_growth_3yr_avg']*100:.2f}%")
+st.metric("Market Cap", f"`${data['market_cap']:,}" if data['market_cap'] else "N/A")
+with col2:
+st.markdown("Phase-Specific Assessment:")
+st.info(f"The business logic engine has placed this company in the {st.session_state.phase} phase.")
+st.session_state.scores['bq'] = st.slider("Score Business Quality", 1, 10, int(st.session_state.scores['bq']), key="bq_slide")
+with tab2:
+st.markdown("### Dimension 2: Competitive Moat Analysis")
+moat_type = st.multiselect("Identify active company moats:", ["Network Effects", "Brand Authority", "High Switching Costs", "Cost Leadership / Scale", "Regulatory Patents"])
+st.session_state.scores['moat'] = st.slider("Score Moat Moat Advantage", 1, 10, int(st.session_state.scores['moat']), key="moat_slide")
+with tab3:
+st.markdown("### Dimension 3: Long-Term Growth Horizon")
+growth_drivers = st.text_area("What structural tailwinds drive this business forward?")
+st.session_state.scores['growth'] = st.slider("Score Long-Term Growth Horizon", 1, 10, int(st.session_state.scores['growth']), key="growth_slide")
+with tab4:
+st.markdown("### Dimension 4: Management Alignment")
+insider_skin = st.checkbox("Founders/Insiders hold meaningful equity stakes (>2%)")
+rational_capital = st.checkbox("Management prioritizes high Return on Invested Capital (ROIC)")
+st.session_state.scores['mgmt'] = st.slider("Score Management & Culture", 1, 10, int(st.session_state.scores['mgmt']), key="mgmt_slide")
+with tab5:
+st.markdown("### Dimension 5: Financial Risk Mitigation")
+risk_flags = st.multiselect("Flag structural threat factors:", ["Customer Concentration Risk", "Extreme Regulatory Exposure", "High Debt / Leverage", "Geopolitical Footprint Threats"])
+st.session_state.scores['risk'] = st.slider("Score Financial Health Strategy", 1, 10, int(st.session_state.scores['risk']), key="risk_slide")
+with tab6:
+st.markdown("### Dimension 6: Valuation Model Sandbox")
+# Phase-aware dynamic valuation logic selection
+is_unprofitable = not data['net_income_positive'] or data['eps'] <= 0
+col1, col2 = st.columns(2)
+with col1:
+if is_unprofitable:; st.markdown("#### 🚨 Price-to-Sales (P/S) Growth Valuation Model")
+st.warning(f"Company is flagged in the {st.session_state.phase} phase with zero net income. Switching automatically to top-line valuation metrics.")
+st.metric("Trailing Annual Revenue", f"$`{data['trailing_revenue']:,}" if data['trailing_revenue'] else "N/A")
+fair_multiple = st.number_input("Assign Fair Target P/S Multiple (e.g., 5 for standard growth, 12 for high-margin SaaS):", value=5.0, step=0.5)
+# Implied valuation based on revenue metrics
+if data['market_cap'] > 0 and data['trailing_revenue'] > 0:; current_ps = data['market_cap'] / data['trailing_revenue']; calculated_intrinsic_value = (data['trailing_revenue'] * fair_multiple) / (data['market_cap'] / data['current_price'])
+st.metric("Current Market P/S Multiple", f"{current_ps:.2f}x")
+st.metric("Calculated Intrinsic Target Value", f"${calculated_intrinsic_value:.2f}") valuation_gap = ((calculated_intrinsic_value - data['current_price']) / calculated_intrinsic_value) * 100 else: calculated_intrinsic_value = 0.0 valuation_gap = -100.0 else: st.markdown("#### 📈 Earnings Power P/E Valuation Model") st.metric("Trailing Diluted EPS", f"${data['eps']:.2f}")
+fair_multiple = st.number_input("Assign Fair Target P/E Multiple (e.g., 15 for mature, 25 for tech):", value=20.0, step=1.0)
+calculated_intrinsic_value = data['eps'] * fair_multiple
+st.metric("Calculated Intrinsic Target Value", f"`${calculated_intrinsic_value:.2f}")
+if calculated_intrinsic_value > 0:; valuation_gap = ((calculated_intrinsic_value - data['current_price']) / calculated_intrinsic_value) * 100
+else:
+valuation_gap = -100.0
+with col2:
+st.markdown("#### Current Pricing Analysis")
+st.metric("Current Market Price", f"$`{data['current_price']:.2f}")
+if valuation_gap > 0:; st.success(f"Stock trades at a {valuation_gap:.1f}% Discount to Target Valuation.")
+else:
+st.error(f"Stock trades at a {abs(valuation_gap):.1f}% Premium to Target Valuation.")
+Interactive visualization block
+if calculated_intrinsic_value > 0:; st.markdown("Visual Target Comparison Summary:")
+chart_data = pd.DataFrame({
+"Price Threshold (`$)": [data['current_price'], calculated_intrinsic_value]
+}, index=["Current Market Price", "Calculated Intrinsic Target"])
+st.bar_chart(chart_data)
+Replicating the Evaluation Logic Block
+st.markdown("---")
+st.subheader("🏁 Automated Recommendation Engine")
+total_qualitative_score = sum(st.session_state.scores.values())
+max_score = 50
+qualitative_percentage = (total_qualitative_score / max_score) * 100
+Integrated Scoring Recommendation Matrix
+if qualitative_percentage < 55 or valuation_gap < -40:
+recommendation = "STRONG SELL 🚨"
+bg_color = "#ff4b4b"
+details = "Low fundamental conviction scorecard or highly dangerous pricing premium. Avoid capital allocation here."
+elif qualitative_percentage < 65 or valuation_gap < -15:
+recommendation = "SELL ⚠️"
+bg_color = "#ffa500"
+details = "Company fundamentals are unstable or the stock price has outrun its core structural capabilities."
+elif 65 <= qualitative_percentage < 75 and -15 <= valuation_gap <= 10:
+recommendation = "HOLD ⚖️"
+bg_color = "#7d7d7d"
+details = "A fair business trading at a fair market price. No immediate margin of safety present to buy aggressively."
+elif qualitative_percentage >= 75 and 10 < valuation_gap <= 25:
+recommendation = "BUY 📈"
+bg_color = "#2ecc71"
+details = "High conviction fundamental scorecard combined with an attractive discount relative to target metrics."
+elif qualitative_percentage >= 80 and valuation_gap > 25:
+recommendation = "STRONG BUY 🔥"
+bg_color = "#1abc9c"
+details = "Elite business metrics trading at a steep margin of safety discount. Primary list capital allocation target."
+else:
+recommendation = "HOLD ⚖️"
+bg_color = "#7d7d7d"
+details = "Conflicting parameters between checklist conviction and market pricing. Maintain structural hold."
+Display output card container
+st.markdown(
+f"""
+
+SYSTEM RECOMMENDATION: {recommendation}
+
+""",
+unsafe_allow_html=True
+)
+col_summary1, col_summary2 = st.columns(2)
+with col_summary1:
+st.markdown(f"Checklist Conviction Score: {total_qualitative_score} / 50 ({qualitative_percentage:.1f}%)")
+st.caption(details)
+with col_summary2:
+st.markdown(f"Model Valuation Target: {data['current_price']:.2f}")
+if st.button("Finalise Report & Clear Sandbox"):
+st.balloons()
+st.success("Analysis report permanently archived.")
+else:
+nano app.py
+pip install streamlit yfinance --break
+python3 -mstreamlit run app.py
+git remote add origin https://github.com/NashSave/stock-simplifier.git
+rm app.py
+nano app.py
+pip install streamlit yfinance --break
+python3 -m streamlit run app.py
+git remote add origin https://github.com/NashSave/stock-simplifier.git
